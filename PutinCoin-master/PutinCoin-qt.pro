@@ -40,6 +40,7 @@ contains(RELEASE, 1) {
 # for extra security against potential buffer overflows: enable GCCs Stack Smashing Protection
 QMAKE_CXXFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
 QMAKE_LFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
+QMAKE_LFLAGS += -no-pie
 # We need to exclude this for Windows cross compile with MinGW 4.2.x, as it will result in a non-working executable!
 # This can be enabled for Windows, when we switch to MinGW >= 4.4.x.
 }
@@ -64,10 +65,10 @@ contains(USE_UPNP, -) {
 } else {
     message(Building with UPNP support)
     isEmpty(MINIUPNPC_LIB_PATH) {
-	windows:MINIUPNPC_LIB_PATH = ../miniupnpc
+        MINIUPNPC_LIB_PATH = ../miniupnpc
     }
     isEmpty(MINIUPNPC_INCLUDE_PATH) {
-	windows:MINIUPNPC_INCLUDE_PATH = ../miniupnpc
+        MINIUPNPC_INCLUDE_PATH = ../miniupnpc
     }
     count(USE_UPNP, 0) {
         USE_UPNP=1
@@ -94,32 +95,32 @@ contains(BITCOIN_NEED_QT_PLUGINS, 1) {
 }
 
 INCLUDEPATH += src/leveldb/include src/leveldb/helpers
-LIBS += ./src/leveldb/libleveldb.a ./src/leveldb/libmemenv.a
+LIBS += $$PWD/src/leveldb/libleveldb.a $$PWD/src/leveldb/libmemenv.a
 SOURCES += src/txdb-leveldb.cpp
 !win32 {
     # we use QMAKE_CXXFLAGS_RELEASE even without RELEASE=1 because we use RELEASE to indicate linking preferences not -O preferences
-    # genleveldb.commands = cd ./src/leveldb && CC=gcc CXX=g++ mingw32-make OPT=\"$$QMAKE_CXXFLAGS $$QMAKE_CXXFLAGS_RELEASE\" libleveldb.a libmemenv.a
+    genleveldb.commands = cd $$PWD/src/leveldb && CC=$$QMAKE_CC CXX=$$QMAKE_CXX $(MAKE) OPT=\"$$QMAKE_CXXFLAGS $$QMAKE_CXXFLAGS_RELEASE\" libleveldb.a libmemenv.a
 } else {
     # make an educated guess about what the ranlib command is called
     isEmpty(QMAKE_RANLIB) {
         QMAKE_RANLIB = $$replace(QMAKE_STRIP, strip, ranlib)
     }
     LIBS += -lshlwapi
-    # genleveldb.commands = cd ./src/leveldb && CC=gcc CXX=g++ TARGET_OS=OS_WINDOWS_CROSSCOMPILE mingw32-make OPT=\"$$QMAKE_CXXFLAGS $$QMAKE_CXXFLAGS_RELEASE\" libleveldb.a libmemenv.a && $$QMAKE_RANLIB ./src/leveldb/libleveldb.a && $$QMAKE_RANLIB ./src/leveldb/libmemenv.a
+    genleveldb.commands = cd $$PWD/src/leveldb && CC=$$QMAKE_CC CXX=$$QMAKE_CXX TARGET_OS=OS_WINDOWS_CROSSCOMPILE $(MAKE) OPT=\"$$QMAKE_CXXFLAGS $$QMAKE_CXXFLAGS_RELEASE\" libleveldb.a libmemenv.a && $$QMAKE_RANLIB $$PWD/src/leveldb/libleveldb.a && $$QMAKE_RANLIB $$PWD/src/leveldb/libmemenv.a
 }
-genleveldb.target = ./src/leveldb/libleveldb.a
+genleveldb.target = $$PWD/src/leveldb/libleveldb.a
 genleveldb.depends = FORCE
-PRE_TARGETDEPS += ./src/leveldb/libleveldb.a
+PRE_TARGETDEPS += $$PWD/src/leveldb/libleveldb.a
 QMAKE_EXTRA_TARGETS += genleveldb
 # Gross ugly hack that depends on qmake internals, unfortunately there is no other way to do it.
-QMAKE_CLEAN += ./src/leveldb/libleveldb.a; cd ./src/leveldb ; mingw32-make clean
+QMAKE_CLEAN += $$PWD/src/leveldb/libleveldb.a; cd $$PWD/src/leveldb ; $(MAKE) clean
 
 # regenerate src/build.h
 !windows|contains(USE_BUILD_INFO, 1) {
     genbuild.depends = FORCE
-    genbuild.commands = cd .; /bin/sh share/genbuild.sh ../build/build.h
-    genbuild.target = ../build/build.h
-    PRE_TARGETDEPS += ../build/build.h
+    genbuild.commands = cd $$PWD; /bin/sh share/genbuild.sh $$OUT_PWD/build/build.h
+    genbuild.target = $$OUT_PWD/build/build.h
+    PRE_TARGETDEPS += $$OUT_PWD/build/build.h
     QMAKE_EXTRA_TARGETS += genbuild
     DEFINES += HAVE_BUILD_INFO
 }
@@ -347,7 +348,7 @@ isEmpty(QMAKE_LRELEASE) {
     win32:QMAKE_LRELEASE = $$[QT_INSTALL_BINS]\\lrelease.exe
     else:QMAKE_LRELEASE = $$[QT_INSTALL_BINS]/lrelease
 }
-isEmpty(QM_DIR):QM_DIR = ./src/qt/locale
+isEmpty(QM_DIR):QM_DIR = $$PWD/src/qt/locale
 # automatically build translations, so they can be included in resource file
 TSQM.name = lrelease ${QMAKE_FILE_IN}
 TSQM.input = TRANSLATIONS
@@ -362,17 +363,18 @@ OTHER_FILES += \
 
 # platform specific defaults, if not overridden on command line
 isEmpty(BOOST_LIB_SUFFIX) {
-    macx:BOOST_LIB_SUFFIX = -mt
-    windows:BOOST_LIB_SUFFIX = -mgw48-mt-s-1_58
+    macx:BOOST_LIB_SUFFIX = -gcc-mt-s-1_58
+    windows:BOOST_LIB_SUFFIX = -gcc-mt-s-1_58
+    BOOST_LIB_SUFFIX = -gcc-mt-s-1_58
 }
 
 isEmpty(BOOST_THREAD_LIB_SUFFIX) {
-    win32:BOOST_THREAD_LIB_SUFFIX = $$BOOST_LIB_SUFFIX
+    win32:BOOST_THREAD_LIB_SUFFIX = _win32$$BOOST_LIB_SUFFIX
     else:BOOST_THREAD_LIB_SUFFIX = $$BOOST_LIB_SUFFIX
 }
 
 isEmpty(BDB_LIB_PATH) {
-    windows:BDB_LIB_PATH = ../db-5.3.28.NC/build_unix
+    BDB_LIB_PATH = ../db-5.3.28.NC/build_unix
 }
 
 isEmpty(BDB_LIB_SUFFIX) {
@@ -380,31 +382,31 @@ isEmpty(BDB_LIB_SUFFIX) {
 }
 
 isEmpty(BDB_INCLUDE_PATH) {
-    windows:BDB_INCLUDE_PATH = ../db-5.3.28.NC/build_unix
+    BDB_INCLUDE_PATH = ../db-5.3.28.NC/build_unix
 }
 
 isEmpty(BOOST_LIB_PATH) {
-    windows:BOOST_LIB_PATH = ../boost_1_58_0/stage/lib
+    BOOST_LIB_PATH = ../boost_1_58_0/stage/lib
 }
 
 isEmpty(BOOST_INCLUDE_PATH) {
-    windows:BOOST_INCLUDE_PATH = ../boost_1_58_0
+    BOOST_INCLUDE_PATH = ../boost_1_58_0
 }
 
 isEmpty(OPENSSL_LIB_PATH) {
-    windows:OPENSSL_LIB_PATH = ../openssl-1.0.1u
+    OPENSSL_LIB_PATH = ../openssl-1.0.1u
 }
 
 isEmpty(OPENSSL_INCLUDE_PATH) {
-    windows:OPENSSL_INCLUDE_PATH = ../openssl-1.0.1u/include
+    OPENSSL_INCLUDE_PATH = ../openssl-1.0.1u/include
 }
 
 isEmpty(QRENCODE_LIB_PATH) {
-    windows:QRENCODE_LIB_PATH = ../qrencode-4.1.1/.libs
+    QRENCODE_LIB_PATH = ../qrencode-4.1.1/.libs
 }
 
 isEmpty(QRENCODE_INCLUDE_PATH) {
-    windows:QRENCODE_INCLUDE_PATH = ../qrencode-4.1.1
+    QRENCODE_INCLUDE_PATH = ../qrencode-4.1.1
 }
 
 windows:DEFINES += WIN32
